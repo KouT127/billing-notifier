@@ -11,4 +11,4 @@ rusoto_ce = "0.45.0"
 reqwest = { version = "0.10", features = ["json"] }
 tokio = { version = "0.2", features = ["full"] }
 chrono = "0.4"
-
+anyhow = "1.0"

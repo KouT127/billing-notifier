@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, fmt};
 use slack_api::chat::{PostMessageRequest, PostMessageResponse};
 use rusoto_ce::{CostExplorerClient, CostExplorer, GetCostAndUsageRequest, DateInterval, MetricValue, ResultByTime};
 use rusoto_core::{Client, HttpClient, Region};
@@ -6,6 +6,7 @@ use reqwest::header::DATE;
 use chrono::{Date, Utc, Duration};
 use std::ops::Sub;
 use std::str::FromStr;
+use std::error::Error;
 
 
 const DAILY: &str = "DAILY";
@@ -29,10 +30,8 @@ impl CostGranularityType {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let token = env::var("SLACK_API_TOKEN")
-        .map_err(|_| "SLACK_API_TOKEN env var must be set")?;
-    let channel_id = env::var("SLACK_CHANNEL_ID")
-        .map_err(|_| "SLACK_CHANNEL_ID env var must be set")?;
+    let token = env::var("SLACK_API_TOKEN").map_err(|_| "SLACK_API_TOKEN env var must be set")?;
+    let channel_id = env::var("SLACK_CHANNEL_ID").map_err(|_| "SLACK_CHANNEL_ID env var must be set")?;
 
     let aws_cost_client = AwsCostClient::default();
     let cost = aws_cost_client
@@ -125,8 +124,8 @@ struct SlackClient<'a> {
 }
 
 impl<'a> SlackClient<'a> {
-    fn new(token: &'a str, channel_id: &'a str) -> Result<Self, &'a str> {
-        let client = slack_api::default_client().map_err(|_| "Could not get default_client")?;
+    fn new(token: &'a str, channel_id: &'a str) -> anyhow::Result<Self> {
+        let client = slack_api::default_client().map_err(|_| SlackError::FailedGetClientError())?;
         Ok(SlackClient {
             client,
             token,
@@ -143,5 +142,33 @@ impl<'a> SlackClient<'a> {
             println!("{:?}", error);
             "Could not send massage"
         })
+    }
+}
+
+#[derive(Debug)]
+enum SlackError {
+    CouldNotRequest(),
+    DoesNotSend(),
+    InvalidDefaultClient(),
+
+}
+
+impl fmt::Display for SlackError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &SlackError::CouldNotRequest() => write!(f, "Request Error"),
+            &SlackError::InvalidDefaultClient() => write!(f, "Could not get default_client"),
+            &SlackError::DoesNotSend() => write!(f, "Could not get default_client"),
+        }
+    }
+}
+
+impl Error for SlackError {
+    fn description(&self) -> &str {
+        match self {
+            &SlackError::CouldNotRequest() => "Request Error",
+            &SlackError::InvalidDefaultClient() => "Could not get default_client",
+            &SlackError::DoesNotSend() => "Failed to send",
+        }
     }
 }
