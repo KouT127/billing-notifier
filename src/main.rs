@@ -125,7 +125,8 @@ struct SlackClient<'a> {
 
 impl<'a> SlackClient<'a> {
     fn new(token: &'a str, channel_id: &'a str) -> anyhow::Result<Self> {
-        let client = slack_api::default_client().map_err(|_| SlackError::FailedGetClientError())?;
+        let client = slack_api::default_client()
+            .map_err(|_| SlackError::InvalidClient())?;
         Ok(SlackClient {
             client,
             token,
@@ -133,32 +134,33 @@ impl<'a> SlackClient<'a> {
         })
     }
 
-    async fn send_message(self, message: &str) -> Result<PostMessageResponse, &str> {
-        slack_api::chat::post_message(&self.client, self.token, &PostMessageRequest {
-            channel: self.channel_id,
-            text: message,
-            ..Default::default()
-        }).await.map_err(|error| {
-            println!("{:?}", error);
-            "Could not send massage"
-        })
+    async fn send_message(self, message: &str) -> anyhow::Result<PostMessageResponse> {
+        slack_api::chat::post_message(
+            &self.client,
+            self.token,
+            &PostMessageRequest {
+                channel: self.channel_id,
+                text: message,
+                ..Default::default()
+            })
+            .await
+            .map_err(|_| SlackError::CouldNotSend().into())
     }
 }
 
 #[derive(Debug)]
 enum SlackError {
     CouldNotRequest(),
-    DoesNotSend(),
-    InvalidDefaultClient(),
-
+    InvalidClient(),
+    CouldNotSend(),
 }
 
 impl fmt::Display for SlackError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             &SlackError::CouldNotRequest() => write!(f, "Request Error"),
-            &SlackError::InvalidDefaultClient() => write!(f, "Could not get default_client"),
-            &SlackError::DoesNotSend() => write!(f, "Could not get default_client"),
+            &SlackError::InvalidClient() => write!(f, "Could not get default_client"),
+            &SlackError::CouldNotSend() => write!(f, "Could not get default_client"),
         }
     }
 }
@@ -167,8 +169,8 @@ impl Error for SlackError {
     fn description(&self) -> &str {
         match self {
             &SlackError::CouldNotRequest() => "Request Error",
-            &SlackError::InvalidDefaultClient() => "Could not get default_client",
-            &SlackError::DoesNotSend() => "Failed to send",
+            &SlackError::InvalidClient() => "Could not get default_client",
+            &SlackError::CouldNotSend() => "Failed to send",
         }
     }
 }
